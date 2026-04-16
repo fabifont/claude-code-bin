@@ -114,6 +114,8 @@ jobs:
 
           aur_url="ssh://aur@aur.archlinux.org/claude-code-bin.git"
           aur_dir="$(mktemp -d)"
+          export GIT_SSH_COMMAND="ssh -i ${HOME}/.ssh/aur -o IdentitiesOnly=yes -o UserKnownHostsFile=${HOME}/.ssh/known_hosts -o StrictHostKeyChecking=yes -o HostKeyAlias=aur.archlinux.org"
+          ssh -i "${HOME}/.ssh/aur" -o IdentitiesOnly=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o StrictHostKeyChecking=yes -o HostKeyAlias=aur.archlinux.org aur@aur.archlinux.org help >/dev/null
           git -c init.defaultBranch=master clone "$aur_url" "$aur_dir"
           cp PKGBUILD .SRCINFO "$aur_dir/"
 
