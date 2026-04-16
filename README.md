@@ -32,6 +32,20 @@ Publishing to AUR requires a repository secret named `AUR_SSH_PRIVATE_KEY`. The
 matching public key must be added to the AUR account that maintains
 `claude-code-bin`.
 
+### External Dispatcher
+
+GitHub's scheduled workflows are best-effort. To trigger the workflow from a
+server you control, copy `.env.example` to `.env`, set `GITHUB_PAT` to a
+fine-grained token with Actions write access to this repository, and run:
+
+```sh
+docker compose up -d
+```
+
+The dispatcher calls GitHub's `workflow_dispatch` endpoint every five minutes.
+The package update still runs on GitHub-hosted runners; if the server is
+offline, GitHub's built-in schedule remains as a fallback.
+
 Packaging files in this repository are licensed under 0BSD. Claude Code itself
 is distributed under Anthropic's terms, referenced by the license file installed
 to `/usr/share/licenses/claude-code-bin/LICENSE`.

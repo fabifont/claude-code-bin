@@ -1,9 +1,11 @@
 *
 !.gitignore
+!.env.example
 !.SRCINFO
 !PKGBUILD
 !README.md
 !LICENSE
+!docker-compose.yml
 !update.sh
 !.github/
 !.github/workflows/

@@ -1,0 +1,42 @@
+name: claude-code-bin-dispatcher
+
+services:
+  workflow-dispatcher:
+    image: curlimages/curl:8.19.0
+    restart: unless-stopped
+    environment:
+      GITHUB_PAT: ${GITHUB_PAT:?Set GITHUB_PAT to a token with Actions write access}
+      GITHUB_OWNER: ${GITHUB_OWNER:-fabifont}
+      GITHUB_REPO: ${GITHUB_REPO:-claude-code-bin}
+      GITHUB_WORKFLOW: ${GITHUB_WORKFLOW:-update.yml}
+      GITHUB_REF: ${GITHUB_REF:-main}
+      DISPATCH_INTERVAL_SECONDS: ${DISPATCH_INTERVAL_SECONDS:-300}
+    entrypoint:
+      - /bin/sh
+      - -ec
+    command:
+      - |
+          : "$${GITHUB_PAT:?GITHUB_PAT is required}"
+          : "$${GITHUB_OWNER:?GITHUB_OWNER is required}"
+          : "$${GITHUB_REPO:?GITHUB_REPO is required}"
+          : "$${GITHUB_WORKFLOW:?GITHUB_WORKFLOW is required}"
+          : "$${GITHUB_REF:?GITHUB_REF is required}"
+          : "$${DISPATCH_INTERVAL_SECONDS:?DISPATCH_INTERVAL_SECONDS is required}"
+
+          while :; do
+            now="$$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "$${now} dispatching $${GITHUB_OWNER}/$${GITHUB_REPO}/$${GITHUB_WORKFLOW} on $${GITHUB_REF}"
+
+            if curl --fail-with-body -fsS -X POST \
+              -H "Authorization: Bearer $${GITHUB_PAT}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2026-03-10" \
+              "https://api.github.com/repos/$${GITHUB_OWNER}/$${GITHUB_REPO}/actions/workflows/$${GITHUB_WORKFLOW}/dispatches" \
+              -d "{\"ref\":\"$${GITHUB_REF}\"}"; then
+              echo "$$(date -u +%Y-%m-%dT%H:%M:%SZ) dispatch accepted"
+            else
+              echo "$$(date -u +%Y-%m-%dT%H:%M:%SZ) dispatch failed" >&2
+            fi
+
+            sleep "$${DISPATCH_INTERVAL_SECONDS}"
+          done
