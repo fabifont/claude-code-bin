@@ -1,0 +1,124 @@
+name: Update and publish claude-code-bin
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "2-59/5 * * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-claude-code-bin
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: Install tools
+        run: pacman -Syu --noconfirm --needed actionlint curl git jq namcap openssh shellcheck sudo
+
+      - uses: actions/checkout@v4
+
+      - name: Prepare build user
+        run: |
+          useradd -m builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          install -d -o builder -g builder /tmp/claude-code-bin-src /tmp/claude-code-bin-build
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Run updater
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: sudo -Eu builder ./update.sh
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet -- PKGBUILD .SRCINFO; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate package update
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          shellcheck --shell=bash --exclude=SC2034,SC2154,SC2164 PKGBUILD update.sh
+          actionlint .github/workflows/update.yml
+          sudo -Eu builder bash -lc 'cmp .SRCINFO <(makepkg --printsrcinfo)'
+          sudo -Eu builder env SRCDEST=/tmp/claude-code-bin-src BUILDDIR=/tmp/claude-code-bin-build makepkg --verifysource
+          sudo -Eu builder env CARCH=aarch64 SRCDEST=/tmp/claude-code-bin-src BUILDDIR=/tmp/claude-code-bin-build makepkg --verifysource
+          sudo -Eu builder env SRCDEST=/tmp/claude-code-bin-src BUILDDIR=/tmp/claude-code-bin-build PKGDEST=/tmp makepkg -f
+          namcap PKGBUILD | tee /tmp/namcap-pkgbuild.log
+          namcap /tmp/claude-code-bin-*.pkg.tar.zst | tee /tmp/namcap-package.log
+          if grep -E ' E: ' /tmp/namcap-pkgbuild.log /tmp/namcap-package.log; then
+            exit 1
+          fi
+
+      - name: Commit package update
+        id: commit
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if [[ "$GITHUB_REF_NAME" != "$DEFAULT_BRANCH" ]]; then
+            echo "::error::Refusing to publish from ${GITHUB_REF_NAME}; expected ${DEFAULT_BRANCH}."
+            exit 1
+          fi
+
+          pkgver="$(awk -F= '/^pkgver=/{print $2}' PKGBUILD)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add PKGBUILD .SRCINFO
+          git commit -m "Update claude-code-bin to ${pkgver}"
+          echo "pkgver=${pkgver}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to AUR
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          PKGVER: ${{ steps.commit.outputs.pkgver }}
+        run: |
+          if [[ -z "${AUR_SSH_PRIVATE_KEY}" ]]; then
+            echo "::error::AUR_SSH_PRIVATE_KEY secret is required to publish to AUR."
+            exit 1
+          fi
+
+          install -dm700 ~/.ssh
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
+          {
+            printf 'Host aur.archlinux.org\n'
+            printf '  IdentityFile ~/.ssh/aur\n'
+            printf '  User aur\n'
+            printf '  IdentitiesOnly yes\n'
+          } > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
+          aur_dir="$(mktemp -d)"
+          git -c init.defaultBranch=master clone ssh://aur@aur.archlinux.org/claude-code-bin.git "$aur_dir"
+          cp PKGBUILD .SRCINFO "$aur_dir/"
+
+          git -C "$aur_dir" config user.name "github-actions[bot]"
+          git -C "$aur_dir" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$aur_dir" add PKGBUILD .SRCINFO
+
+          if git -C "$aur_dir" diff --cached --quiet; then
+            echo "AUR repository is already up to date."
+            exit 0
+          fi
+
+          git -C "$aur_dir" commit -m "Update claude-code-bin to ${PKGVER}"
+          git -C "$aur_dir" push origin HEAD:master
+
+      - name: Push to GitHub
+        if: steps.changes.outputs.changed == 'true'
+        run: git push origin "HEAD:${GITHUB_REF_NAME}"
