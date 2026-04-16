@@ -92,6 +92,7 @@ jobs:
         if: steps.changes.outputs.changed == 'true'
         env:
           AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          AUR_SSH_PASSPHRASE: ${{ secrets.AUR_SSH_PASSPHRASE }}
           PKGVER: ${{ steps.commit.outputs.pkgver }}
         run: |
           if [[ -z "${AUR_SSH_PRIVATE_KEY}" ]]; then
@@ -114,8 +115,24 @@ jobs:
 
           aur_url="ssh://aur@aur.archlinux.org/claude-code-bin.git"
           aur_dir="$(mktemp -d)"
-          export GIT_SSH_COMMAND="ssh -i ${HOME}/.ssh/aur -o IdentitiesOnly=yes -o UserKnownHostsFile=${HOME}/.ssh/known_hosts -o StrictHostKeyChecking=yes -o HostKeyAlias=aur.archlinux.org"
-          ssh -i "${HOME}/.ssh/aur" -o IdentitiesOnly=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o StrictHostKeyChecking=yes -o HostKeyAlias=aur.archlinux.org aur@aur.archlinux.org help >/dev/null
+
+          if [[ -n "${AUR_SSH_PASSPHRASE}" ]]; then
+            eval "$(ssh-agent -s)"
+            trap 'ssh-agent -k >/dev/null' EXIT
+            askpass="$(mktemp)"
+            cat > "$askpass" <<'EOF'
+          #!/bin/sh
+          printf '%s\n' "$AUR_SSH_PASSPHRASE"
+          EOF
+            chmod 700 "$askpass"
+            DISPLAY=:0 SSH_ASKPASS="$askpass" SSH_ASKPASS_REQUIRE=force ssh-add "${HOME}/.ssh/aur" </dev/null
+            export GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=${HOME}/.ssh/known_hosts -o StrictHostKeyChecking=yes -o HostKeyAlias=aur.archlinux.org"
+            ssh -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o StrictHostKeyChecking=yes -o HostKeyAlias=aur.archlinux.org aur@aur.archlinux.org help >/dev/null
+          else
+            export GIT_SSH_COMMAND="ssh -i ${HOME}/.ssh/aur -o IdentitiesOnly=yes -o UserKnownHostsFile=${HOME}/.ssh/known_hosts -o StrictHostKeyChecking=yes -o HostKeyAlias=aur.archlinux.org"
+            ssh -i "${HOME}/.ssh/aur" -o IdentitiesOnly=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o StrictHostKeyChecking=yes -o HostKeyAlias=aur.archlinux.org aur@aur.archlinux.org help >/dev/null
+          fi
+
           git -c init.defaultBranch=master clone "$aur_url" "$aur_dir"
           cp PKGBUILD .SRCINFO "$aur_dir/"
 
