@@ -102,7 +102,8 @@ jobs:
           install -dm700 ~/.ssh
           printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
           chmod 600 ~/.ssh/aur
-          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
+          printf '%s\n' 'aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN' > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
           {
             printf 'Host aur.archlinux.org\n'
             printf '  IdentityFile ~/.ssh/aur\n'
@@ -111,8 +112,9 @@ jobs:
           } > ~/.ssh/config
           chmod 600 ~/.ssh/config
 
+          aur_url="ssh://aur@aur.archlinux.org/claude-code-bin.git"
           aur_dir="$(mktemp -d)"
-          git -c init.defaultBranch=master clone ssh://aur@aur.archlinux.org/claude-code-bin.git "$aur_dir"
+          git -c init.defaultBranch=master clone "$aur_url" "$aur_dir"
           cp PKGBUILD .SRCINFO "$aur_dir/"
 
           git -C "$aur_dir" config user.name "github-actions[bot]"
