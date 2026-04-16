@@ -2,6 +2,14 @@ name: Update and publish claude-code-bin
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/update.yml
+      - .SRCINFO
+      - PKGBUILD
+      - update.sh
   schedule:
     - cron: "2-59/5 * * * *"
 
