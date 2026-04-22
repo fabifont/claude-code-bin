@@ -6,7 +6,8 @@
 !README.md
 !LICENSE
 !docker-compose.yml
-!update.sh
+!update-version.sh
+!.nvchecker.toml
 !.github/
 !.github/workflows/
 !.github/workflows/update.yml

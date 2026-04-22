@@ -1,4 +1,4 @@
-name: Update and publish claude-code-bin
+name: Update and publish Claude Code
 
 on:
   workflow_dispatch:
@@ -8,8 +8,9 @@ on:
     paths:
       - .github/workflows/update.yml
       - .SRCINFO
+      - .nvchecker.toml
       - PKGBUILD
-      - update.sh
+      - update-version.sh
   schedule:
     - cron: "*/5 * * * *"
 
@@ -17,12 +18,15 @@ permissions:
   contents: write
 
 concurrency:
-  group: update-claude-code-bin
+  group: update-claude-code
   cancel-in-progress: false
 
 defaults:
   run:
     shell: bash
+
+env:
+  AUR_PKGBASE: claude-code-bin
 
 jobs:
   update:
@@ -30,7 +34,7 @@ jobs:
     container: archlinux:base-devel
     steps:
       - name: Install tools
-        run: pacman -Syu --noconfirm --needed actionlint curl git jq namcap openssh shellcheck sudo
+        run: pacman -Syu --noconfirm --needed actionlint curl devtools git jq namcap nvchecker openssh shellcheck sudo
 
       - uses: actions/checkout@v4
 
@@ -38,62 +42,86 @@ jobs:
         run: |
           useradd -m builder
           chown -R builder:builder "$GITHUB_WORKSPACE"
-          install -d -o builder -g builder /tmp/claude-code-bin-src /tmp/claude-code-bin-build
+          install -d -o builder -g builder /tmp/claude-code-src /tmp/claude-code-build /tmp/claude-code-pkg
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-      - name: Run updater
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: sudo -Eu builder ./update.sh
+      - name: Check upstream version
+        id: version
+        if: github.event_name != 'push'
+        run: |
+          set +e
+          sudo -Eu builder pkgctl version check --format json | tee /tmp/pkgctl-version.json
+          status=${PIPESTATUS[0]}
+          set -e
 
-      - name: Check for changes
-        id: changes
+          case "$status" in
+            0)
+              echo "outdated=false" >> "$GITHUB_OUTPUT"
+              ;;
+            2)
+              echo "outdated=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              exit "$status"
+              ;;
+          esac
+
+      - name: Run updater
+        if: steps.version.outputs.outdated == 'true'
+        run: sudo -Eu builder ./update-version.sh
+
+      - name: Check generated update
+        id: update
+        if: steps.version.outputs.outdated == 'true'
         run: |
           if git diff --quiet -- PKGBUILD .SRCINFO; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Validate package update
-        if: steps.changes.outputs.changed == 'true'
-        run: |
-          shellcheck --shell=bash --exclude=SC2034,SC2154,SC2164 PKGBUILD update.sh
-          actionlint .github/workflows/update.yml
-          sudo -Eu builder bash -lc 'cmp .SRCINFO <(makepkg --printsrcinfo)'
-          sudo -Eu builder env SRCDEST=/tmp/claude-code-bin-src BUILDDIR=/tmp/claude-code-bin-build makepkg --verifysource
-          sudo -Eu builder env CARCH=aarch64 SRCDEST=/tmp/claude-code-bin-src BUILDDIR=/tmp/claude-code-bin-build makepkg --verifysource
-          sudo -Eu builder env SRCDEST=/tmp/claude-code-bin-src BUILDDIR=/tmp/claude-code-bin-build PKGDEST=/tmp makepkg -f
-          namcap PKGBUILD | tee /tmp/namcap-pkgbuild.log
-          namcap /tmp/claude-code-bin-*.pkg.tar.zst | tee /tmp/namcap-package.log
-          if grep -E ' E: ' /tmp/namcap-pkgbuild.log /tmp/namcap-package.log; then
+            echo "::error::pkgctl reported a new version, but update-version.sh did not change PKGBUILD or .SRCINFO."
             exit 1
           fi
 
+          pkgver="$(awk -F= '/^pkgver=/{print $2}' PKGBUILD)"
+          echo "pkgver=${pkgver}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate package
+        if: github.event_name == 'push' || steps.version.outputs.outdated == 'true'
+        run: |
+          shellcheck --shell=bash --exclude=SC2034,SC2154,SC2164 PKGBUILD update-version.sh
+          actionlint .github/workflows/update.yml
+          sudo -Eu builder bash -lc 'cmp .SRCINFO <(makepkg --printsrcinfo)'
+          sudo -Eu builder env SRCDEST=/tmp/claude-code-src BUILDDIR=/tmp/claude-code-build makepkg --verifysource
+          sudo -Eu builder env CARCH=aarch64 SRCDEST=/tmp/claude-code-src BUILDDIR=/tmp/claude-code-build makepkg --verifysource
+          sudo -Eu builder env SRCDEST=/tmp/claude-code-src BUILDDIR=/tmp/claude-code-build PKGDEST=/tmp/claude-code-pkg makepkg -f
+          pacman -U --noconfirm /tmp/claude-code-pkg/*.pkg.tar.zst
+          DISABLE_AUTOUPDATER=1 claude --version
+          namcap PKGBUILD
+          namcap /tmp/claude-code-pkg/*.pkg.tar.zst
+
       - name: Commit package update
-        id: commit
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.version.outputs.outdated == 'true'
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          PKGVER: ${{ steps.update.outputs.pkgver }}
         run: |
           if [[ "$GITHUB_REF_NAME" != "$DEFAULT_BRANCH" ]]; then
             echo "::error::Refusing to publish from ${GITHUB_REF_NAME}; expected ${DEFAULT_BRANCH}."
             exit 1
           fi
 
-          pkgver="$(awk -F= '/^pkgver=/{print $2}' PKGBUILD)"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add PKGBUILD .SRCINFO
-          git commit -m "Update claude-code-bin to ${pkgver}"
-          echo "pkgver=${pkgver}" >> "$GITHUB_OUTPUT"
+          git commit -m "Update ${AUR_PKGBASE} to ${PKGVER}"
+
+      - name: Push package update to GitHub
+        if: steps.version.outputs.outdated == 'true'
+        run: git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: Publish to AUR
-        if: steps.changes.outputs.changed == 'true'
+        if: github.event_name == 'push' || steps.version.outputs.outdated == 'true'
         env:
           AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           AUR_SSH_PASSPHRASE: ${{ secrets.AUR_SSH_PASSPHRASE }}
-          PKGVER: ${{ steps.commit.outputs.pkgver }}
+          PKGVER: ${{ steps.update.outputs.pkgver }}
         run: |
           if [[ -z "${AUR_SSH_PRIVATE_KEY}" ]]; then
             echo "::error::AUR_SSH_PRIVATE_KEY secret is required to publish to AUR."
@@ -113,7 +141,7 @@ jobs:
           } > ~/.ssh/config
           chmod 600 ~/.ssh/config
 
-          aur_url="ssh://aur@aur.archlinux.org/claude-code-bin.git"
+          aur_url="ssh://aur@aur.archlinux.org/${AUR_PKGBASE}.git"
           aur_dir="$(mktemp -d)"
 
           if [[ -n "${AUR_SSH_PASSPHRASE}" ]]; then
@@ -133,21 +161,29 @@ jobs:
             ssh -i "${HOME}/.ssh/aur" -o IdentitiesOnly=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o StrictHostKeyChecking=yes -o HostKeyAlias=aur.archlinux.org aur@aur.archlinux.org help >/dev/null
           fi
 
+          package_files=(.nvchecker.toml PKGBUILD .SRCINFO update-version.sh)
+
           git -c init.defaultBranch=master clone "$aur_url" "$aur_dir"
-          cp PKGBUILD .SRCINFO "$aur_dir/"
+          cp "${package_files[@]}" "$aur_dir/"
 
           git -C "$aur_dir" config user.name "github-actions[bot]"
           git -C "$aur_dir" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git -C "$aur_dir" add PKGBUILD .SRCINFO
+          git -C "$aur_dir" add "${package_files[@]}"
 
           if git -C "$aur_dir" diff --cached --quiet; then
             echo "AUR repository is already up to date."
             exit 0
           fi
 
-          git -C "$aur_dir" commit -m "Update claude-code-bin to ${PKGVER}"
-          git -C "$aur_dir" push origin HEAD:master
+          if [[ -z "${PKGVER}" ]]; then
+            PKGVER="$(awk -F= '/^pkgver=/{print $2}' PKGBUILD)"
+          fi
 
-      - name: Push to GitHub
-        if: steps.changes.outputs.changed == 'true'
-        run: git push origin "HEAD:${GITHUB_REF_NAME}"
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            commit_message="Sync ${AUR_PKGBASE} packaging"
+          else
+            commit_message="Update ${AUR_PKGBASE} to ${PKGVER}"
+          fi
+
+          git -C "$aur_dir" commit -m "$commit_message"
+          git -C "$aur_dir" push origin HEAD:master
