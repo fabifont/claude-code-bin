@@ -1,10 +1,8 @@
-# claude-code-bin
+# claude-code
 
-Temporary AUR automation testbed for Claude Code packaging.
+Automation-ready AUR packaging for Claude Code.
 
-This repository currently keeps the `claude-code-bin` package identity so the
-automation can be tested without touching the existing `claude-code` AUR package.
-The packaging model otherwise follows the current `claude-code` package:
+The packaging model follows the current `claude-code` package:
 
 - upstream binaries are downloaded from `https://downloads.claude.ai`
 - architecture checksums come from the upstream `manifest.json`
@@ -38,7 +36,7 @@ makepkg --verifysource
 env CARCH=aarch64 makepkg --verifysource
 makepkg -f
 namcap PKGBUILD
-namcap claude-code-bin-*.pkg.tar.zst
+namcap claude-code-*.pkg.tar.zst
 ```
 
 ## Automation
@@ -71,21 +69,6 @@ The dispatcher calls the workflow's `workflow_dispatch` endpoint every five
 minutes. It only starts the GitHub workflow; package validation and AUR
 publishing still happen in GitHub Actions.
 
-## Migration to claude-code
-
-Once this is accepted for the existing `claude-code` package, the expected
-cleanup is:
-
-- change `pkgname` from `claude-code-bin` to `claude-code`
-- remove `provides` and `conflicts`
-- change the `.nvchecker.toml` section to `[claude-code]`
-- change `AUR_PKGBASE` in the workflow to `claude-code`
-- update `.env.example` and `docker-compose.yml` defaults from
-  `claude-code-bin` to the target GitHub repository name if the repository is
-  renamed
-- update validation commands and package globs from `claude-code-bin` to
-  `claude-code`
-
 Packaging files in this repository are licensed under 0BSD. Claude Code itself
 is distributed under Anthropic's terms, referenced by the license file installed
-to `/usr/share/licenses/claude-code-bin/LICENSE`.
+to `/usr/share/licenses/claude-code/LICENSE`.

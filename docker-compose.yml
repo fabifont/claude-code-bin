@@ -1,13 +1,14 @@
-name: claude-code-bin-dispatcher
+name: claude-code-dispatcher
 
 services:
   workflow-dispatcher:
     image: curlimages/curl:8.19.0
     restart: unless-stopped
     environment:
+      AUR_PKGBASE: ${AUR_PKGBASE:-claude-code}
       GITHUB_PAT: ${GITHUB_PAT:?Set GITHUB_PAT to a token with Actions write access}
       GITHUB_OWNER: ${GITHUB_OWNER:-fabifont}
-      GITHUB_REPO: ${GITHUB_REPO:-claude-code-bin}
+      GITHUB_REPO: ${GITHUB_REPO:-claude-code}
       GITHUB_WORKFLOW: ${GITHUB_WORKFLOW:-update.yml}
       GITHUB_REF: ${GITHUB_REF:-main}
       DISPATCH_INTERVAL_SECONDS: ${DISPATCH_INTERVAL_SECONDS:-300}
@@ -16,6 +17,7 @@ services:
       - -ec
     command:
       - |
+          : "$${AUR_PKGBASE:?AUR_PKGBASE is required}"
           : "$${GITHUB_PAT:?GITHUB_PAT is required}"
           : "$${GITHUB_OWNER:?GITHUB_OWNER is required}"
           : "$${GITHUB_REPO:?GITHUB_REPO is required}"

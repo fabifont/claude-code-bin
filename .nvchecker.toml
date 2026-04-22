@@ -1,4 +1,4 @@
-[claude-code-bin]
+[claude-code]
 source = "regex"
 url = "https://downloads.claude.ai/claude-code-releases/latest"
 regex = ".+"
