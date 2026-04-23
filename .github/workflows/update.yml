@@ -54,17 +54,20 @@ jobs:
           status=${PIPESTATUS[0]}
           set -e
 
-          case "$status" in
-            0)
-              echo "outdated=false" >> "$GITHUB_OUTPUT"
-              ;;
-            2)
-              echo "outdated=true" >> "$GITHUB_OUTPUT"
-              ;;
-            *)
-              exit "$status"
-              ;;
-          esac
+          if (( status != 0 && status != 2 )); then
+            exit "$status"
+          fi
+
+          if jq -e 'any(.[]; .status != "success")' /tmp/pkgctl-version.json >/dev/null; then
+            jq -r '.[] | select(.status != "success") | "\(.pkgbase): \(.message // "version check failed")"' /tmp/pkgctl-version.json >&2
+            exit 1
+          fi
+
+          if jq -e 'any(.[]; .out_of_date == true)' /tmp/pkgctl-version.json >/dev/null; then
+            echo "outdated=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "outdated=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Run updater
         if: steps.version.outputs.outdated == 'true'
