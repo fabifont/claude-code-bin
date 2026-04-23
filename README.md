@@ -10,7 +10,7 @@ The packaging model otherwise follows the current `claude-code` package:
 - architecture checksums come from the upstream `manifest.json`
 - the legal/compliance document is installed as the package license
 - the binary is installed under `/opt/claude-code/bin/claude`
-- `/usr/bin/claude` is a small wrapper that disables the upstream auto-updater
+- `/usr/bin/claude` is a small wrapper that disables upstream update paths
 
 ## Update
 

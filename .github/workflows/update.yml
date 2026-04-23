@@ -95,7 +95,7 @@ jobs:
           sudo -Eu builder env CARCH=aarch64 SRCDEST=/tmp/claude-code-src BUILDDIR=/tmp/claude-code-build makepkg --verifysource
           sudo -Eu builder env SRCDEST=/tmp/claude-code-src BUILDDIR=/tmp/claude-code-build PKGDEST=/tmp/claude-code-pkg makepkg -f
           pacman -U --noconfirm /tmp/claude-code-pkg/*.pkg.tar.zst
-          DISABLE_AUTOUPDATER=1 claude --version
+          DISABLE_UPDATES=1 DISABLE_AUTOUPDATER=1 claude --version
           namcap PKGBUILD
           namcap /tmp/claude-code-pkg/*.pkg.tar.zst
 
