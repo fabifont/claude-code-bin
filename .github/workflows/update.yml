@@ -63,22 +63,22 @@ jobs:
             exit 1
           fi
 
-          if jq -e 'any(.[]; .out_of_date == true)' /tmp/pkgctl-version.json >/dev/null; then
-            echo "outdated=true" >> "$GITHUB_OUTPUT"
+          if jq -e 'any(.[]; (.local_version // "") != (.upstream_version // ""))' /tmp/pkgctl-version.json >/dev/null; then
+            echo "version_changed=true" >> "$GITHUB_OUTPUT"
           else
-            echo "outdated=false" >> "$GITHUB_OUTPUT"
+            echo "version_changed=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Run updater
-        if: steps.version.outputs.outdated == 'true'
+        if: steps.version.outputs.version_changed == 'true'
         run: sudo -Eu builder ./update-version.sh
 
       - name: Check generated update
         id: update
-        if: steps.version.outputs.outdated == 'true'
+        if: steps.version.outputs.version_changed == 'true'
         run: |
           if git diff --quiet -- PKGBUILD .SRCINFO; then
-            echo "::error::pkgctl reported a new version, but update-version.sh did not change PKGBUILD or .SRCINFO."
+            echo "::error::pkgctl detected upstream version drift, but update-version.sh did not change PKGBUILD or .SRCINFO."
             exit 1
           fi
 
@@ -86,7 +86,7 @@ jobs:
           echo "pkgver=${pkgver}" >> "$GITHUB_OUTPUT"
 
       - name: Validate package
-        if: github.event_name == 'push' || steps.version.outputs.outdated == 'true'
+        if: github.event_name == 'push' || steps.version.outputs.version_changed == 'true'
         run: |
           shellcheck --shell=bash --exclude=SC2034,SC2154,SC2164 PKGBUILD update-version.sh
           actionlint .github/workflows/update.yml
@@ -100,7 +100,7 @@ jobs:
           namcap /tmp/claude-code-pkg/*.pkg.tar.zst
 
       - name: Commit package update
-        if: steps.version.outputs.outdated == 'true'
+        if: steps.version.outputs.version_changed == 'true'
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           PKGVER: ${{ steps.update.outputs.pkgver }}
@@ -116,11 +116,11 @@ jobs:
           git commit -m "Update ${AUR_PKGBASE} to ${PKGVER}"
 
       - name: Push package update to GitHub
-        if: steps.version.outputs.outdated == 'true'
+        if: steps.version.outputs.version_changed == 'true'
         run: git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: Publish to AUR
-        if: github.event_name == 'push' || steps.version.outputs.outdated == 'true'
+        if: github.event_name == 'push' || steps.version.outputs.version_changed == 'true'
         env:
           AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           AUR_SSH_PASSPHRASE: ${{ secrets.AUR_SSH_PASSPHRASE }}

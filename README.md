@@ -14,7 +14,8 @@ The packaging model otherwise follows the current `claude-code` package:
 
 ## Update
 
-Use `pkgctl version check` to detect whether upstream has a newer release, then
+Use `pkgctl version check` to detect whether upstream differs from the pinned
+version, then
 run `update-version.sh` to update pinned package metadata:
 
 ```sh
@@ -46,9 +47,11 @@ The GitHub workflow has two paths:
 
 - `push`: validate and publish the current package files to AUR. This allows
   manual PKGBUILD or script changes without forcing a version bump.
-- `schedule` / `workflow_dispatch`: run `pkgctl version check`; when upstream is
-  newer, run `update-version.sh`, validate, commit the generated package update,
-  push it to GitHub, and publish to AUR.
+- `schedule` / `workflow_dispatch`: run `pkgctl version check`; when the pinned
+  package version differs from upstream `latest`, run `update-version.sh`,
+  validate, commit the generated package update, push it to GitHub, and publish
+  to AUR. This also follows upstream rollbacks if Anthropic points `latest`
+  back to an older release.
 
 Publishing to AUR requires repository secrets named `AUR_SSH_PRIVATE_KEY` and,
 if the key is encrypted, `AUR_SSH_PASSPHRASE`. The matching public key must be
