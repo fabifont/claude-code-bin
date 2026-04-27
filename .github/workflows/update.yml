@@ -58,8 +58,27 @@ jobs:
             exit "$status"
           fi
 
-          if jq -e 'any(.[]; .status != "success")' /tmp/pkgctl-version.json >/dev/null; then
-            jq -r '.[] | select(.status != "success") | "\(.pkgbase): \(.message // "version check failed")"' /tmp/pkgctl-version.json >&2
+          if jq -e '
+            any(
+              .[];
+              (.status != "success")
+              and (
+                .status != "warning"
+                or .message != "local version is newer than upstream"
+              )
+            )
+          ' /tmp/pkgctl-version.json >/dev/null; then
+            jq -r '
+              .[]
+              | select(
+                  (.status != "success")
+                  and (
+                    .status != "warning"
+                    or .message != "local version is newer than upstream"
+                  )
+                )
+              | "\(.pkgbase): \(.message // "version check failed")"
+            ' /tmp/pkgctl-version.json >&2
             exit 1
           fi
 
