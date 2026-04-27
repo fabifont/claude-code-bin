@@ -26,7 +26,7 @@ defaults:
     shell: bash
 
 env:
-  AUR_PKGBASE: claude-code-bin
+  AUR_PKGBASE: claude-code
 
 jobs:
   update:
