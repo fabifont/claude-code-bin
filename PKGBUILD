@@ -40,7 +40,6 @@ package() {
 	cat > "${pkgdir}/usr/bin/claude" << 'EOF'
 #!/bin/sh
 export DISABLE_UPDATES=1
-export DISABLE_AUTOUPDATER=1
 exec /opt/claude-code/bin/claude "$@"
 EOF
 	chmod 755 "${pkgdir}/usr/bin/claude"
