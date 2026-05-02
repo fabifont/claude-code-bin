@@ -1,3 +1,5 @@
+# Maintainer: Christopher Cooper <christopher@cg505.com>
+# Maintainer: Jérôme Poulin <jeromepoulin@gmail.com>
 # Maintainer: Fabio Fontana (fabifont) <me@fabifont.dev>
 
 pkgname=claude-code-bin
