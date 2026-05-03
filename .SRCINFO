@@ -1,4 +1,4 @@
-pkgbase = claude-code-bin
+pkgbase = claude-code
 	pkgdesc = An agentic coding tool that lives in your terminal
 	pkgver = 2.1.126
 	pkgrel = 2
@@ -14,8 +14,6 @@ pkgbase = claude-code-bin
 	optdepends = tmux: agent team split panes
 	optdepends = bubblewrap: sandboxing
 	optdepends = socat: sandboxing
-	provides = claude-code=2.1.126
-	conflicts = claude-code
 	options = !strip
 	source = cc-legal::https://code.claude.com/docs/en/legal-and-compliance.md
 	sha256sums = SKIP
@@ -24,4 +22,4 @@ pkgbase = claude-code-bin
 	source_aarch64 = claude-2.1.126-aarch64::https://downloads.claude.ai/claude-code-releases/2.1.126/linux-arm64/claude
 	sha256sums_aarch64 = 88a6dca613a40559f3bac8a946a2ec6e60a870b91938d3df93dcac1dec4848cb
 
-pkgname = claude-code-bin
+pkgname = claude-code

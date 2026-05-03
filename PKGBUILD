@@ -2,7 +2,7 @@
 # Maintainer: Jérôme Poulin <jeromepoulin@gmail.com>
 # Maintainer: Fabio Fontana (fabifont) <me@fabifont.dev>
 
-pkgname=claude-code-bin
+pkgname=claude-code
 pkgver=2.1.126
 pkgrel=2
 pkgdesc="An agentic coding tool that lives in your terminal"
@@ -12,9 +12,6 @@ license=('LicenseRef-claude-code')
 depends=('bash')
 # Binary is a self-contained Bun executable with embedded JS/resources - stripping breaks it
 options=('!strip')
-
-provides=("claude-code=${pkgver}")
-conflicts=('claude-code')
 
 optdepends=(
 	'git: allow Claude to use git'
